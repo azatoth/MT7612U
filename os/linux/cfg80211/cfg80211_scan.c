@@ -276,7 +276,7 @@ static void CFG80211_UpdateBssTableRssi(
 			/* HIT */
 			CFG80211_CalBssAvgRssi(pBssEntry);
 			bss->signal = pBssEntry->AvgRssi * 100; //UNIT: MdBm
-			cfg80211_put_bss(bss);
+			cfg80211_put_bss(pWiphy, bss);
 		}
 	}	
 }

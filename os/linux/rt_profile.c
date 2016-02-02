@@ -195,7 +195,7 @@ NDIS_STATUS	RTMPReadParametersHook(RTMP_ADAPTER *pAd)
 		{
 #ifndef OS_ABL_SUPPORT
 			// TODO: need to roll back when convert into OSABL code
-				 fsize = (ULONG)srcf->f_dentry->d_inode->i_size;
+				 fsize = (ULONG)srcf->f_path.dentry->d_inode->i_size;
 				if (buf_size < (fsize + 1))
 					buf_size = fsize + 1;
 #endif /* OS_ABL_SUPPORT */

@@ -473,8 +473,6 @@ static int CFG80211_OpsScan(
 	struct iw_scan_req IwReq;
 	union iwreq_data Wreq;
 
-	CFG80211DBG(RT_DEBUG_TRACE, ("========================================================================\n"));
-	CFG80211DBG(RT_DEBUG_TRACE, ("80211> %s ==> %s(%d)\n", __FUNCTION__, pNdev->name, pNdev->ieee80211_ptr->iftype));
 	MAC80211_PAD_GET(pAd, pWiphy);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0))
@@ -709,6 +707,7 @@ Note:
 */
 static int CFG80211_OpsTxPwrSet(
 	IN struct wiphy						*pWiphy,
+	IN struct wireless_dev				*pDev,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36))	
 	IN enum nl80211_tx_power_setting	Type,
 #else
@@ -740,6 +739,7 @@ Note:
 */
 static int CFG80211_OpsTxPwrGet(
 	IN struct wiphy						*pWiphy,
+	IN struct wireless_dev				*pDev,
 	IN int								*pdBm)
 {
 	CFG80211DBG(RT_DEBUG_TRACE, ("80211> %s ==>\n", __FUNCTION__));
@@ -802,7 +802,7 @@ Note:
 static int CFG80211_OpsStaGet(
 	IN struct wiphy						*pWiphy,
 	IN struct net_device				*pNdev,
-	IN UINT8							*pMac,
+	IN const UINT8						*pMac,
 	IN struct station_info				*pSinfo)
 {
 	VOID *pAd;
@@ -824,9 +824,14 @@ static int CFG80211_OpsStaGet(
 	if (StaInfo.TxRateFlags != RT_CMD_80211_TXRATE_LEGACY)
 	{
 		pSinfo->txrate.flags = RATE_INFO_FLAGS_MCS;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0))
+        pSinfo->txrate.bw = RATE_INFO_BW_20;
+		if (StaInfo.TxRateFlags & RT_CMD_80211_TXRATE_BW_40)
+			pSinfo->txrate.bw = RATE_INFO_BW_40;
+#else
 		if (StaInfo.TxRateFlags & RT_CMD_80211_TXRATE_BW_40)
 			pSinfo->txrate.flags |= RATE_INFO_FLAGS_40_MHZ_WIDTH;
-
+#endif
 		if (StaInfo.TxRateFlags & RT_CMD_80211_TXRATE_SHORT_GI)
 			pSinfo->txrate.flags |= RATE_INFO_FLAGS_SHORT_GI;
 
@@ -837,21 +842,31 @@ static int CFG80211_OpsStaGet(
 	{
 		pSinfo->txrate.legacy = StaInfo.TxRateMCS;
 	} 
-
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0))
+	pSinfo->filled |= BIT(NL80211_STA_INFO_TX_BITRATE);
+	pSinfo->filled |= BIT(NL80211_STA_INFO_SIGNAL);
+#else
 	pSinfo->filled |= STATION_INFO_TX_BITRATE;
+	pSinfo->filled |= STATION_INFO_SIGNAL;
+#endif
 
 	/* fill signal */
 	pSinfo->signal = StaInfo.Signal;
-	pSinfo->filled |= STATION_INFO_SIGNAL;
+
 
 #ifdef CONFIG_AP_SUPPORT
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0))
+	pSinfo->filled |= BIT(NL80211_STA_INFO_TX_PACKETS);
+	pSinfo->filled |= BIT(NL80211_STA_INFO_INACTIVE_TIME);
+#else
+	pSinfo->filled |= STATION_INFO_TX_PACKETS;
+	pSinfo->filled |= STATION_INFO_INACTIVE_TIME;
+#endif
 	/* fill tx count */
 	pSinfo->tx_packets = StaInfo.TxPacketCnt;
-	pSinfo->filled |= STATION_INFO_TX_PACKETS;
 
 	/* fill inactive time */
 	pSinfo->inactive_time = StaInfo.InactiveTime;
-	pSinfo->filled |= STATION_INFO_INACTIVE_TIME;
 #endif /* CONFIG_AP_SUPPORT */
 
 	return 0;
@@ -1651,10 +1666,10 @@ static int CFG80211_OpsSurveyGet(
 
 	/* return the information to upper layer */
 	pSurvey->channel = ((CFG80211_CB *)(SurveyInfo.pCfg80211))->pCfg80211_Channels;
-	pSurvey->filled = SURVEY_INFO_CHANNEL_TIME_BUSY |
-						SURVEY_INFO_CHANNEL_TIME_EXT_BUSY;
-	pSurvey->channel_time_busy = SurveyInfo.ChannelTimeBusy; /* unit: us */
-	pSurvey->channel_time_ext_busy = SurveyInfo.ChannelTimeExtBusy;
+	pSurvey->filled = SURVEY_INFO_TIME_BUSY |
+						SURVEY_INFO_TIME_EXT_BUSY;
+	pSurvey->time_busy = SurveyInfo.ChannelTimeBusy; /* unit: us */
+	pSurvey->time_ext_busy = SurveyInfo.ChannelTimeExtBusy;
 
 	CFG80211DBG(RT_DEBUG_TRACE, ("80211> busy time = %ld %ld\n",
 				(ULONG)SurveyInfo.ChannelTimeBusy,
@@ -1853,7 +1868,7 @@ static int CFG80211_OpsRemainOnChannel(
 static void CFG80211_OpsMgmtFrameRegister(
     struct wiphy *pWiphy,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0))
-	struct wireless_dev *wdev
+	struct wireless_dev *wdev,
 #else	
     struct net_device *dev,
 #endif /* LINUX_VERSION_CODE: 3.6.0 */	
@@ -1882,38 +1897,19 @@ static void CFG80211_OpsMgmtFrameRegister(
 
 //Supplicant_NEW_TDLS
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0))
 static int CFG80211_OpsMgmtTx(
     IN struct wiphy *pWiphy,
     IN struct wireless_dev *wdev,
-    IN struct ieee80211_channel *pChan,
-    IN bool Offchan,
-    IN unsigned int Wait,
-    IN const u8 *pBuf,
-    IN size_t Len,
-    IN bool no_cck,	
-    IN bool done_wait_for_ack, 
+	IN struct cfg80211_mgmt_tx_params *params,
     IN u64 *pCookie)
-#else
-static int CFG80211_OpsMgmtTx(
-    IN struct wiphy *pWiphy,
-    IN struct net_device *pDev,
-    IN struct ieee80211_channel *pChan,
-    IN bool Offchan,
-    IN enum nl80211_channel_type ChannelType,
-    IN bool ChannelTypeValid,
-    IN unsigned int Wait,
-    IN const u8 *pBuf,
-    IN size_t Len,
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
-    IN bool no_cck,	
-#endif
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,3,0))
-    IN bool done_wait_for_ack, 
-#endif
-    IN u64 *pCookie)
-#endif /* LINUX_VERSION_CODE: 3.6.0 */	
 {
+    struct ieee80211_channel *pChan = params->chan;
+    bool Offchan = params->offchan;
+    unsigned int Wait = params->wait;
+    const u8 *pBuf = params->buf;
+    size_t Len = params->len;
+    bool no_cck = params->no_cck;
+    bool done_wait_for_ack = params->dont_wait_for_ack;
     VOID *pAd;
     UINT32 ChanId;
 
@@ -1930,12 +1926,6 @@ static int CFG80211_OpsMgmtTx(
     CFG80211DBG(RT_DEBUG_INFO, ("80211> Mgmt Channel = %d\n", ChanId));
 
 	/* Send the Frame with basic rate 6 */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
-    if (no_cck)
-		; //pAd->isCfgDeviceInP2p = TRUE;
-#else
-		
-#endif	
 	
     *pCookie = 5678;	
     RTMP_DRIVER_80211_CHANNEL_LOCK(pAd, ChanId);
@@ -1952,7 +1942,7 @@ static int CFG80211_OpsMgmtTx(
 
 static int CFG80211_OpsTxCancelWait(
     IN struct wiphy *pWiphy,
-    IN struct net_device *pDev,
+    IN struct wireless_dev *pDev,
     u64 cookie)
 {
 	CFG80211DBG(RT_DEBUG_OFF, ("80211> %s ==>\n", __FUNCTION__));
@@ -2222,7 +2212,7 @@ static int CFG80211_OpsChangeBss(
 static int CFG80211_OpsStaDel(
 	struct wiphy *pWiphy, 
 	struct net_device *dev,
-	UINT8 *pMacAddr)
+	const UINT8 *pMacAddr)
 {
 	VOID *pAd;
 	MAC80211_PAD_GET(pAd, pWiphy);
@@ -2245,7 +2235,7 @@ static int CFG80211_OpsStaDel(
 static int CFG80211_OpsStaAdd(
         struct wiphy *wiphy,
         struct net_device *dev,
-        UINT8 *mac,
+        const UINT8 *mac,
 	struct station_parameters *params)
 {
 	CFG80211DBG(RT_DEBUG_TRACE, ("80211> %s ==>\n", __FUNCTION__));
@@ -2255,7 +2245,7 @@ static int CFG80211_OpsStaAdd(
 static int CFG80211_OpsStaChg(
 	struct wiphy *pWiphy,
 	struct net_device *dev,
-	UINT8 *pMacAddr,
+	const UINT8 *pMacAddr,
 	struct station_parameters *params)
 {
 	void *pAd;
@@ -2296,7 +2286,7 @@ static int CFG80211_OpsStaChg(
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0))
 static struct wireless_dev* CFG80211_OpsVirtualInfAdd(
         IN struct wiphy                                 *pWiphy,
-        IN char 										*name,
+        IN const char 									*name,
         IN enum nl80211_iftype                 			 Type,
         IN u32                                          *pFlags,
         struct vif_params                               *pParams)
@@ -2391,7 +2381,7 @@ static int CFG80211_start_p2p_device(
 	return 0;
 }      
 
-static int CFG80211_stop_p2p_device(
+static void CFG80211_stop_p2p_device(
 	struct wiphy *pWiphy,
 	struct wireless_dev *wdev)
 {
@@ -2399,7 +2389,6 @@ static int CFG80211_stop_p2p_device(
 	struct net_device *dev = wdev->netdev;
 	CFG80211DBG(RT_DEBUG_OFF, ("80211> %s, %s [%d]==>\n", __FUNCTION__, dev->name, dev->ieee80211_ptr->iftype));
 	MAC80211_PAD_GET(pAd, pWiphy);
-	return 0;
 }
 #endif /* LINUX_VERSION_CODE: 3.6.0 */
 
@@ -2490,7 +2479,7 @@ struct cfg80211_ops CFG80211_Ops = {
 
 	/* set channel for a given wireless interface */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0))
-	.set_monitor_channel = CFG80211_OpsMonitorChannelSet,
+//	.set_monitor_channel = CFG80211_OpsMonitorChannelSet,
 #else	
 	.set_channel	     = CFG80211_OpsChannelSet,
 #endif /* LINUX_VERSION_CODE: 3.6.0 */
@@ -2658,7 +2647,7 @@ static const struct ieee80211_regdomain rtmp_custom_regd = {
 	.n_reg_rules = 2,
 	.alpha2 = "00",
 	.reg_rules = {
-		REG_RULE(5260-20, 5320+20, 40, 6, 20, NL80211_RRF_DFS | NL80211_RRF_PASSIVE_SCAN),
+		REG_RULE(5260-20, 5320+20, 40, 6, 20, NL80211_RRF_DFS | NL80211_RRF_NO_IR),
 		REG_RULE(5725-10, 5850+10, 40, 0, 30, NL80211_RRF_DFS),
 	}
 };

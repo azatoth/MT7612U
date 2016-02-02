@@ -144,8 +144,9 @@ static INT CFG80211DRV_UpdateApSettingFromBeacon(PRTMP_ADAPTER pAd, UINT mbss_id
 	CFG80211_SyncPacketWmmIe(pAd, pBeacon->beacon_tail, pBeacon->beacon_tail_len);
 
 	/* Security */
+#ifdef RT_CFG80211_P2P_SUPPORT
 	CFG80211_ParseBeaconIE(pAd, pMbss, wdev, wpa_ie, rsn_ie);
-
+#endif /* RT_CFG80211_P2P_SUPPORT */
 	pMbss->CapabilityInfo =	CAP_GENERATE(1, 0, (wdev->WepStatus != Ndis802_11EncryptionDisabled), 
 			 (pAd->CommonCfg.TxPreamble == Rt802_11PreambleLong ? 0 : 1), pAd->CommonCfg.bUseShortSlotTime, /*SpectrumMgmt*/FALSE);
 			 
@@ -284,9 +285,11 @@ VOID CFG80211_UpdateBeacon(
  
     BeaconTransmit.word = 0;
 	/* Should be Find the P2P IE Then Set Basic Rate to 6M */	
+#ifdef RT_CFG80211_P2P_SUPPORT
 	if (RTMP_CFG80211_VIF_P2P_GO_ON(pAd)) 
 	BeaconTransmit.field.MODE = MODE_OFDM; /* Use 6Mbps */
 	else
+#endif
 		BeaconTransmit.field.MODE = MODE_CCK;	
 	BeaconTransmit.field.MCS = MCS_RATE_6;
 

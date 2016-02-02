@@ -409,8 +409,8 @@ ifeq ($(OSABL),YES)
 	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_ap_util.ko /tftpboot
 	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_ap_net.ko /tftpboot
 endif
-	rm -f os/linux/$(MODULE)_ap.ko.lzma
-	/root/bin/lzma e os/linux/$(MODULE)_ap.ko os/linux/$(MODULE)_ap.ko.lzma
+	#rm -f os/linux/$(MODULE)_ap.ko.lzma
+	#lzma e os/linux/$(MODULE)_ap.ko os/linux/$(MODULE)_ap.ko.lzma
 else	
 ifeq ($(RT28xx_MODE),APSTA)
 	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_apsta.ko /tftpboot

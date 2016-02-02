@@ -491,10 +491,10 @@ extern int DetectOverlappingPeriodicRound;
 VOID Handle_BSS_Width_Trigger_Events(RTMP_ADAPTER *pAd) 
 {
 	ULONG Now32;
-	
+#ifdef DOT11N_DRAFT3
 	if (pAd->CommonCfg.bBssCoexEnable == FALSE)
 		return;
-
+#endif /* DOT11N_DRAFT3 */
 	if ((pAd->CommonCfg.HtCapability.HtCapInfo.ChannelWidth == BW_40) &&
 		(pAd->CommonCfg.Channel <=14))
 	{	

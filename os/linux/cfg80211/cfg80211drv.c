@@ -1248,18 +1248,10 @@ VOID CFG80211_LostApInform(
 	PRTMP_ADAPTER pAd = (PRTMP_ADAPTER)pAdCB;
 	CFG80211_CB *p80211CB = pAd->pCfg80211_CB;
 	
-	DBGPRINT(RT_DEBUG_TRACE, ("80211> CFG80211_LostApInform ==> %d\n", 
-					p80211CB->pCfg80211_Wdev->sme_state));
 	pAd->StaCfg.bAutoReconnect = FALSE;
-
-	if (p80211CB->pCfg80211_Wdev->sme_state == CFG80211_SME_CONNECTING)
+	if (p80211CB->pCfg80211_Wdev->current_bss)
 	{
-		   cfg80211_connect_result(pAd->net_dev, NULL, NULL, 0, NULL, 0,
-								   WLAN_STATUS_UNSPECIFIED_FAILURE, GFP_KERNEL);
-	}
-	else if (p80211CB->pCfg80211_Wdev->sme_state == CFG80211_SME_CONNECTED)
-	{
-		   cfg80211_disconnected(pAd->net_dev, 0, NULL, 0, GFP_KERNEL);
+		   cfg80211_disconnected(pAd->net_dev, 0, NULL, 0, false, GFP_KERNEL);
 	} 
 }
 #endif /*CONFIG_STA_SUPPORT*/
